@@ -41,19 +41,35 @@ jobs:
         run: docker push ${{ secrets.DOCKER_USERNAME }}/ci-cd-demo:latest
 
       # Secure deployment
-      - name: Load SSH key
-        uses: webfactory/ssh-agent@v0.7.0
-        with:
-          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+      deploy-to-staging:
+  runs-on: ubuntu-latest
+  needs: docker-build-and-deploy
+  steps:
+    - name: Start SSH Agent
+      uses: webfactory/ssh-agent@v0.7.0
+      with:
+        ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
 
-      - name: Add staging server to known hosts
-        run: ssh-keyscan -H YOUR_STAGING_SERVER_IP_OR_DOMAIN >> ~/.ssh/known_hosts
+    - name: Add staging server to known hosts
+      run: ssh-keyscan -H 13.53.49.194 >> ~/.ssh/known_hosts
 
-      - name: Deploy to staging server
-        run: |
-          ssh USERNAME@YOUR_STAGING_SERVER_IP_OR_DOMAIN "
-            docker pull ${{ secrets.DOCKER_USERNAME }}/ci-cd-demo:latest &&
-            docker stop app || true &&
-            docker rm app || true &&
-            docker run -d --name app -p 80:3000 ${{ secrets.DOCKER_USERNAME }}/ci-cd-demo:latest
-          "
+    - name: Deploy on staging server
+      run: |
+        ssh ec2-user@13.53.49.194 "
+          docker pull sam6569/ci-cd-demo:latest &&
+          docker stop app || true &&
+          docker rm app || true &&
+          docker run -d --name app -p 80:3000 sam6569/ci-cd-demo:latest
+        "
+
+    - name: Test app health
+      run: |
+        echo "Waiting 10 seconds for the app to start..."
+        sleep 10
+        HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" http://13.53.49.194)
+        if [ $HTTP_STATUS -ne 200 ]; then
+          echo "App is not responding! HTTP status: $HTTP_STATUS"
+          exit 1
+        else
+          echo "App is running successfully! HTTP status: $HTTP_STATUS"
+        fi
