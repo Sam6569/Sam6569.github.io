@@ -40,10 +40,18 @@ jobs:
       - name: Push Docker image
         run: docker push ${{ secrets.DOCKER_USERNAME }}/ci-cd-demo:latest
 
-      # Vulnerable deployment (we'll fix later)
-      - name: Deploy to staging
+      # Secure deployment
+      - name: Load SSH key
+        uses: webfactory/ssh-agent@v0.7.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add staging server to known hosts
+        run: ssh-keyscan -H YOUR_STAGING_SERVER_IP_OR_DOMAIN >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging server
         run: |
-          ssh -o StrictHostKeyChecking=no user@staging-server "
+          ssh USERNAME@YOUR_STAGING_SERVER_IP_OR_DOMAIN "
             docker pull ${{ secrets.DOCKER_USERNAME }}/ci-cd-demo:latest &&
             docker stop app || true &&
             docker rm app || true &&
